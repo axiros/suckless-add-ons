@@ -87,13 +87,8 @@ function set_theme {
 }
 
 function cd {
-    # cd to filename -> cd to its dir:
-    if [[ -t 1 ]]; then
-        builtin cd "$@"
-        set_theme
-    else
-        builtin cd "$@"
-    fi
+    builtin cd "$@"
+    [[ -t 1 ]] && set_theme
 }
 
 export -f cd set_theme
@@ -113,6 +108,8 @@ an ssh-wrapper.
 1. Send a custom ANSI-Escape sequence with the theme name to stdout, so that
    javascript based terminal emulators can re-apply matching stylesheets, when
    playing back recordings done in st.
+1. Work off the shelve also with other theme suppliers. st is true color, i.e.
+   also the universe of CSS themes is 1:1 useable
 
 Not yet implemented but maybe one day. If you have other ideas let me know, via a github issue.
 
@@ -158,8 +155,16 @@ For alpha you need also the [alpha](https://st.suckless.org/patches/alpha/) patc
 1. Install [fzf](https://github.com/junegunn/fzf)
 1. Make [this file](./theme-reloading/st_theme) available in your `$PATH` - it
    will be called at hotkey `alt-return` (change in `config.def.h`)
+1. In e.g. your `.bashrc` export `$THEMES_DIR`, pointint to where all your
+   themes are:
 
-
+```bash
+2.~$ cd $THEMES_DIR
+2.xresources$ ls
+base16-3024-256.Xresources
+base16-gruvbox-light-hard-256.Xresources
+(...)
+```
 
 
 ### Addendum
