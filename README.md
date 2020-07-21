@@ -107,7 +107,7 @@ an ssh-wrapper.
 
 ## Ideas
 
-1. Why not dynamically change the Red-ness of a window based on CPU burnt within it? 
+1. Why not dynamically change the Red-ness of a window based on CPU currently burnt within it? 
 1. Send a custom ANSI-Escape sequence with the theme name to stdout, so that
    javascript based terminal emulators can re-apply matching stylesheets, when
    playing back recordings done in st.
