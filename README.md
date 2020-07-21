@@ -169,10 +169,18 @@ base16-gruvbox-light-hard-256.Xresources
 
 Optional: xdotool, notify-send
 
-`st_theme` invokes `xdotool` to quickly activate the window at fzf-select, otherwise X does
+- `st_theme` invokes `xdotool` to quickly activate the window at fzf-select, otherwise X does
 not always redraw them when you hover over the available themes too quickly ->
 Optional. 
-Also it sometimes invokes notify-send or dunstify, for some notifications.
+- Also it sometimes invokes notify-send or dunstify, for some notifications.
+- For a special feature, writing `.terminal_theme` files for directory based
+  themes it requires to have the directory st is currently in, from the fzf window.
+  This is tricky, when `st_theme` is launched via a hotkey and not by just
+  typing `st_theme` into the terminal. `st_theme` tries to call a script
+  `wininfos` and passes the windowid of st. I have such a script but it is
+  pretty custom.
+  When `wininfos` is not available `st_theme` writes the theme into the directory where it was launched. 
+
 
 -> Remove or replace with your tools if you don't want/have the optionals.
 
