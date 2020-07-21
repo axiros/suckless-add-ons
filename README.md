@@ -1,8 +1,8 @@
-# Suckless Terminal "st" Add Ons
+# Suckless Add Ons
 
-## Dynamic Colors
+## Dynamic Terminal Colors
 
-Allows st to read color and alpha definitions for the 16 base colors from a file, after receiving a signal.
+Allows [st](https://st.suckless.org/) to read color and alpha definitions for the 16 base colors from a file, after receiving a signal.
 
 At reload we try to
 
@@ -70,6 +70,8 @@ You can pull many themes from the base16 repo and have them rendered into .Xreso
 ![theme-picker-demo](./theme-reloading/theme_sel.gif)
 
 1. It opens on hotkey (default alt-enter) in another X window.
+1. Since this works more low level than `tput` commands, it also affects vim
+   directly as you can see. Personally I still prefer to use colorschemes, though.
 1. Can also set a theme into a given window w/o directly
 
 The latter feature allows e.g. coloring based on directory entered, via an
@@ -149,6 +151,7 @@ Short test:
 
 Once started, find the PID of it and send a kill -1 (HUP) to it. It should survive the reload and NOT hangup any longer.
 
+For alpha you need also the [alpha](https://st.suckless.org/patches/alpha/) patch and a running compositor.
 
 #### Theme Picker
 

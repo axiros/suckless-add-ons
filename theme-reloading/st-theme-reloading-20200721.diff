@@ -42,7 +42,7 @@ index 76b7e0d..0d34a52 100644
 +change_bg_col(const Arg* a)
 +{
 +    /* These are the 256 terminal colors. initial 257 mapped to a hex code , see config.h.
-+     * Basically this has the effect of a changing border color
++     * This has the effect of a changing border color, once in vim with a colorscheme set.
 +     */
 +
 +    if ( defaultbg > 250) { defaultbg = -1; }
@@ -179,10 +179,10 @@ index 76f167f..abaf8e3 100644
 +  if (reloading != 0) return;
 +  reloading = 1;
 +  /* fprintf(stderr, "%d Got Signal - Reloading.\n", xw.win); */
-+  /*TODO: Understand a command file and do the right thing */
++  /*TODO: Currently only theme reloads => Understand a command file and do more things. */
 +  config_init();
 +  /* this crashes at heavy concurrent load, i.e. another one also reloading, with another theme
-+   * Seems to happen in XftColorAllocValue or Name (asking the Xserver)
++   * Seems to happen in XftColorAllocValue or -Name (asking the Xserver)
 +   * */
 +  xloadcols();
 +  redraw();
