@@ -69,6 +69,7 @@ You can pull many themes from the base16 repo and have them rendered into .Xreso
 
 ![theme-picker-demo](./theme-reloading/theme_sel.gif)
 
+Sorry for the flickering - we try to show that it is pretty fast, applying the themes.
 
 1. It opens on hotkey (default alt-enter) in another X window. If you prefer to have it
    floating, then set a window class within the launch command, in `st.c`
@@ -172,8 +173,9 @@ base16-gruvbox-light-hard-256.Xresources
 Optional: xdotool, notify-send
 
 - `st_theme` invokes `xdotool` to quickly activate the window at fzf-select, otherwise X does
-not always redraw them when you hover over the available themes too quickly ->
-Optional. 
+not always redraw them when you hover over the available themes too quickly.
+We also use `xdotool` to select other windows a certain theme should be
+applied at. `xprop` would be an alternative.
 - Also it sometimes invokes notify-send or dunstify, for some notifications.
 - For a special feature, writing `.terminal_theme` files for directory based
   themes it requires to have the directory st is currently in, from the fzf window.
