@@ -152,6 +152,7 @@ For alpha you need also the [alpha](https://st.suckless.org/patches/alpha/) patc
 
 #### Theme Picker
 
+1. Have a python executable in your $PATH
 1. Install [fzf](https://github.com/junegunn/fzf)
 1. Make [this file](./theme-reloading/st_theme) available in your `$PATH` - it
    will be called at hotkey `alt-return` (change in `config.def.h`)
@@ -165,6 +166,15 @@ base16-3024-256.Xresources
 base16-gruvbox-light-hard-256.Xresources
 (...)
 ```
+
+Optional: xdotool, notify-send
+
+`st_theme` invokes `xdotool` to quickly activate the window at fzf-select, otherwise X does
+not always redraw them when you hover over the available themes too quickly ->
+Optional. 
+Also it sometimes invokes notify-send or dunstify, for some notifications.
+
+-> Remove or replace with your tools if you don't want/have the optionals.
 
 
 ### Addendum
