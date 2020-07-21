@@ -155,7 +155,7 @@ For alpha you need also the [alpha](https://st.suckless.org/patches/alpha/) patc
 1. Install [fzf](https://github.com/junegunn/fzf)
 1. Make [this file](./theme-reloading/st_theme) available in your `$PATH` - it
    will be called at hotkey `alt-return` (change in `config.def.h`)
-1. In e.g. your `.bashrc` export `$THEMES_DIR`, pointint to where all your
+1. In e.g. your `.bashrc` export `$THEMES_DIR`, pointing to where all your
    themes are:
 
 ```bash
