@@ -69,10 +69,12 @@ You can pull many themes from the base16 repo and have them rendered into .Xreso
 
 ![theme-picker-demo](./theme-reloading/theme_sel.gif)
 
-1. It opens on hotkey (default alt-enter) in another X window.
+
+1. It opens on hotkey (default alt-enter) in another X window. If you prefer to have it
+   floating, then set a window class within the launch command, in `st.c`
 1. Since this works more low level than `tput` commands, it also affects vim
    directly as you can see. Personally I still prefer to use colorschemes, though.
-1. Can also set a theme into a given window w/o directly
+1. Can also set a theme into a given window directly, w/o fzf.
 
 The latter feature allows e.g. coloring based on directory entered, via an
 overload of `cd`, e.g.: 
