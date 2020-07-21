@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # coding: utf-8
 
-export d_all="/home/gk/inst/base16/output/xresources/xresources"
+export d_all="$THEMES_DIR"
 export d_st="/tmp/st"
 export fn_lock="/tmp/st/previewrunning"
 export pid_fz= # This fzf window's st process id
