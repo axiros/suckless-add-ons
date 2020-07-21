@@ -1,0 +1,206 @@
+From bf319a35ca7f707ea2fd7a78daeabfffa244f9b2 Mon Sep 17 00:00:00 2001
+From: Gunther Klessinger <gk@axiros.com>
+Date: Tue, 21 Jul 2020 18:06:23 +0200
+Subject: [PATCH] Hot reloading of themes
+
+---
+ config.def.h |  2 ++
+ st.c         | 23 ++++++++++++++
+ st.h         |  2 ++
+ x.c          | 85 ++++++++++++++++++++++++++++++++++++++++++++++++----
+ 4 files changed, 107 insertions(+), 5 deletions(-)
+
+diff --git a/config.def.h b/config.def.h
+index 9b99782..c1bfd59 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -235,6 +235,8 @@ static Shortcut shortcuts[] = {
+ 	{ TERMMOD,              XK_Y,           selpaste,       {.i =  0} },
+ 	{ ShiftMask,            XK_Insert,      selpaste,       {.i =  0} },
+ 	{ TERMMOD,              XK_Num_Lock,    numlock,        {.i =  0} },
++	{ Mod1Mask,             XK_Return,      reload_all_cols,{.i =  1} },
++	{ ControlMask|Mod1Mask|Mod4Mask, XK_b,  change_bg_col,  {.i =  1} },
+ };
+ 
+ /*
+diff --git a/st.c b/st.c
+index 76b7e0d..0d34a52 100644
+--- a/st.c
++++ b/st.c
+@@ -2595,3 +2595,26 @@ redraw(void)
+ 	tfulldirt();
+ 	draw();
+ }
++
++void
++reload_all_cols(const Arg* a)
++{
++    system("st -e st_theme -w $WINDOWID  &");
++}
++
++void
++change_bg_col(const Arg* a)
++{
++    /* These are the 256 terminal colors. initial 257 mapped to a hex code , see config.h.
++     * Basically this has the effect of a changing border color
++     */
++
++    if ( defaultbg > 250) { defaultbg = -1; }
++    defaultbg +=1 ;
++    /*fprintf(stderr, "have bg %d\n", defaultbg); */
++    term.c.attr.bg = defaultbg;
++    redraw();
++}
++
++
++
+diff --git a/st.h b/st.h
+index 3d351b6..15a4484 100644
+--- a/st.h
++++ b/st.h
+@@ -85,6 +85,8 @@ void printscreen(const Arg *);
+ void printsel(const Arg *);
+ void sendbreak(const Arg *);
+ void toggleprinter(const Arg *);
++void change_bg_col(const Arg *);
++void reload_all_cols(const Arg *);
+ 
+ int tattrset(int);
+ void tnew(int, int);
+diff --git a/x.c b/x.c
+index 76f167f..abaf8e3 100644
+--- a/x.c
++++ b/x.c
+@@ -59,6 +59,8 @@ typedef struct {
+ 	void *dst;
+ } ResourcePref;
+ 
++int reloading = 0;
++
+ /* X modifiers */
+ #define XK_ANY_MOD    UINT_MAX
+ #define XK_NO_MOD     0
+@@ -1607,6 +1609,7 @@ xsettitle(char *p)
+ int
+ xstartdraw(void)
+ {
++    if (reloading > 0) { return 0; }
+ 	return IS_SET(MODE_VISIBLE);
+ }
+ 
+@@ -2012,21 +2015,75 @@ resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst)
+ 	return 0;
+ }
+ 
++int
++read_file(char *fn, char* buf, int exit_ls) {
++    /*fprintf(stderr, "read %s\n", fn); */
++    FILE *fp;
++    int len=0;
++    int ch;
++    fp = fopen(fn, "r");
++    if (!fp) return -1;
++    do{
++       ch = fgetc(fp);
++       buf[len] = ch;
++       len++;
++       if (ch=='\n' && exit_ls == 1) break;
++     } while(ch!=EOF);
++    fclose(fp);
++    buf[len-1] = 0;
++    return 0;
++};
++
+ void
+ config_init(void)
+ {
++    /*
++     * Reads color definitions from an Xresource style file and loads them hot.
++     *
++     * This gets called at startup or by a reload signal handler.
++     */
++
+ 	char *resm;
++	const char *envval;
+ 	XrmDatabase db;
+ 	ResourcePref *p;
+-
+ 	XrmInitialize();
+-	resm = XResourceManagerString(xw.dpy);
++
++    char fn[100];
++    int ch;
++    int pidnr;
++    char pid[20]="";
++    char xrdb[1000]="";
++    int err;
++    char *wid;
++    FILE *fp;
++
++    /* we try a specific one and if not found a general one for all
++     * the specific one must have OUR pid: */
++    snprintf(fn, 100, "/tmp/st/%d/pid", xw.win);
++    err = read_file(fn, pid, 1);
++    if (!err) {
++        pidnr = atoi(pid);
++        if (pidnr == getpid()) {
++            snprintf(fn, 100, "/tmp/st/%d/xrdb", xw.win);
++            err = read_file(fn, xrdb, 0);
++            resm = xrdb;
++        } else err = 1;
++    }
++    if (err) {
++        err = read_file("/tmp/st/xrdb", xrdb, 0);
++        resm = xrdb;
++    }
++
++    if (err) resm = XResourceManagerString(xw.dpy); /* .XResources file */
++
+ 	if (!resm)
+ 		return;
+-
+ 	db = XrmGetStringDatabase(resm);
+-	for (p = resources; p < resources + LEN(resources); p++)
+-		resource_load(db, p->name, p->type, p->dst);
++	for (p = resources; p < resources + LEN(resources); p++) {
++        /* fprintf(stderr, "setting %s\n", p->name); */
++	    resource_load(db, p->name, p->type, p->dst);
++    }
+ }
+ 
+ void
+@@ -2042,6 +2099,23 @@ usage(void)
+ 	    " [stty_args ...]\n", argv0, argv0);
+ }
+ 
++void
++reload_handler(int signum)
++{
++  if (reloading != 0) return;
++  reloading = 1;
++  /* fprintf(stderr, "%d Got Signal - Reloading.\n", xw.win); */
++  /*TODO: Understand a command file and do the right thing */
++  config_init();
++  /* this crashes at heavy concurrent load, i.e. another one also reloading, with another theme
++   * Seems to happen in XftColorAllocValue or Name (asking the Xserver)
++   * */
++  xloadcols();
++  redraw();
++  signal(1,reload_handler);
++  reloading = 0;
++}
++
+ int
+ main(int argc, char *argv[])
+ {
+@@ -2113,6 +2187,7 @@ run:
+ 	xinit(cols, rows);
+ 	xsetenv();
+ 	selinit();
++    signal(1,reload_handler);
+ 	run();
+ 
+ 	return 0;
+-- 
+2.25.4
+
