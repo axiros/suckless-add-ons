@@ -7,6 +7,8 @@ version: 20200728
 
 # Suckless Add Ons
 
+<a href="https://travis-ci.com/axiros/suckless-add-ons"><img alt="Build Status" src="https://travis-ci.com/axiros/suckless-add-ons.svg?branch=master"></a>
+
 ## Dynamic Terminal Colors
 
 Allows [st](https://st.suckless.org/) to read color and alpha definitions from a file, after receiving a signal.
