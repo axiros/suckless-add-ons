@@ -38,7 +38,9 @@ Sorry for the flickering - we try to show that it is pretty fast, applying the t
    though - this does not collide with setting the 16 base colors.
 1. Can also set a theme into a given window directly, w/o fzf
 
-    st_theme set [-t <theme name>] [-a <relative alpha change>] [-c <custom attr, e.g. alpha=0.3>]
+```bash
+st_theme set [-t <theme name>] [-a <relative alpha change>] [-c <custom attr, e.g. alpha=0.3>]
+```
 
 The latter feature allows e.g. coloring based on directory entered, via an overload of `cd`, e.g.: 
 
