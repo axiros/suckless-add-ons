@@ -73,7 +73,7 @@ function eql {
     local content
     fn="$1"; test -e "$fn" || fn="$d_tmp/mywid/$fn"
     # we strip all spaces, format of xrdb file too prone to failure otherwise
-    content="$(sed -e "s/\ //g" "$fn" | sed -e '/^$/d' )"
+    content="$(sort "$fn" | sed -e "s/\ //g"  | sed -e '/^$/d' )"
     test "$content" == "$(echo -e "$2")" || die "$fn: Content not equal:\n$*" "is:\n$content"
 }
 
@@ -133,7 +133,7 @@ function test_set[empty_config]:theme {
 function test_set[empty_config]:theme_and_custom_overwrites {
     clean_config
     $STT set -w mywid -p mypid -t 'atlas' -c background="#FF0000"
-    eql config "alpha=1\ntheme=atlas\nbackground=#FF0000"
+    eql config "alpha=1\nbackground=#FF0000\ntheme=atlas"
     has xrdb '*alpha:1' '*background:#FF0000' '*foreground:#a1a19a'
 }
 
@@ -142,7 +142,7 @@ function test_set[empty_config]:no_theme_source_at_subseq_customization {
     $STT set -w mywid -p mypid -t 'atlas' -c background="#FF0000"
     # Another customization no theme change:
     $STT set -w mywid -p mypid -t atlas -c alpha=0.2 -c background="#FF0001"
-    eql config "alpha=0.2\ntheme=atlas\nbackground=#FF0001"
+    eql config "alpha=0.2\nbackground=#FF0001\ntheme=atlas"
     has xrdb '*alpha:0.2' '*background:#FF0001' 
     # since the theme did not change we did NOT write it into xrdb again:
     grep foreground "$d_tmp/mywid/xrdb" && die "Unexpected *foreground w/o theme change"
@@ -154,7 +154,7 @@ function test_set[empty_config]:new_theme_sourced_at_subseq_customization_with_n
     $STT set -w mywid -p mypid -t 'atlas' -c background="#FF0000"
     # Another customization no theme change:
     $STT set -w mywid -p mypid -t atelier-cave -c alpha=0.2 -c background="#FF0002"
-    eql config "alpha=0.2\ntheme=atelier-cave\nbackground=#FF0002"
+    eql config "alpha=0.2\nbackground=#FF0002\ntheme=atelier-cave\n"
     # since the theme did change we did write it into xrdb again:
     has xrdb '*alpha:0.2' '*background:#FF0002' '*foreground:#8b8792'
     return 0
@@ -165,7 +165,7 @@ function test_set[empty_config]:theme_fuzzy_selected_alpha_rel_changes {
     fzf_callback () { echo "atelier-cave"; }
     export -f fzf_callback
     $STT set -w mywid -p mypid -t 'z' -c background="#FF0000"
-    eql config "alpha=1\ntheme=atelier-cave\nbackground=#FF0000"
+    eql config "alpha=1\nbackground=#FF0000\ntheme=atelier-cave"
     has xrdb '*alpha:1' '*background:#FF0000' '*foreground:#8b8792'
     # change
     $STT set -w mywid -p mypid -t 'atlas' -a -0.1 -c background="#FF0002"
@@ -174,7 +174,7 @@ function test_set[empty_config]:theme_fuzzy_selected_alpha_rel_changes {
 
     # select again cave:
     $STT set -w mywid -p mypid -t 'a' -a -0.1 -c background="#FF0003"
-    eql config "alpha=0.8\ntheme=atelier-cave\nbackground=#FF0003"
+    eql config "alpha=0.8\nbackground=#FF0003\ntheme=atelier-cave"
     has xrdb '*alpha:0.8' '*background:#FF0003' '*foreground:#8b8792'
 }
 
