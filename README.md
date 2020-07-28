@@ -149,6 +149,39 @@ applied at. `xprop` would be an alternative.
 
 -> Remove or replace with your tools if you don't want/have the optionals.
 
+#### Theme Picker Config
+
+Happens in "$HOME/.config/st_theme". The files there are all created and changed automatically when using `st_theme`, except: 
+
+- `config.sh/filter`
+
+
+We have
+
+##### `config.sh`
+
+Parametrizes st_theme itself, in shell soureable format. Read at startup of st_theme. Contains:
+
+- ST_THEMES_DIR [mandatory]: Directory of all available themes (entered automatically after `b16convert`, see below)
+- filter [optional]: Blacklist of themes at startup of the theme selector (`F` toggles). Manually entered.
+  Example (for dark theme addicts): `filter='light|github|dirtysea|tomorrow  |shapeshifter|brush trees  |cupertino|cupcake|soda  '`
+ 
+##### `default_config`
+
+Written at Enter key at the theme selector, together with a resulting Xresources file which is loaded into X server.
+
+Contains:
+
+- theme: name of theme
+- alpha: transparency value (1: opaque)
+- [value overwrites], e.g. `background=#444`
+
+##### `xrdb_template`
+
+Maps base16 key/values into st color values and alpha. Defines the managed set
+of colors. Usually not touch, created at first start of st_theme.
+
+
 
 ### Pulling Themes
 
