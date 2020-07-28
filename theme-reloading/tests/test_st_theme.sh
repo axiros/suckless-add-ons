@@ -8,6 +8,7 @@ d_tmp="$d_test_work/tmp/st"
 d_cfg="$d_test_work/config/st_theme"
 # allows to insert /bin/bash within tests and run the same:
 export STT="st_theme -D $d_cfg"
+export WINDOWID=1233456
 
 tmsg () { echo -e "$*"; }
 
