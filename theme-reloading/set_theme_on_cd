@@ -7,44 +7,40 @@
 
 
 
+export st_dir_theme
 function set_theme {
     test -z "$WINDOWID" && return # not in X or sudo w/o env... 
-    local mycfg t tf dt d="${1:-"$(pwd)"}"
+    local DT mycfg precfg dt dflt_cfg d
     local home="${home:-$HOME}" # can be set to sudo user's home
-    dt="$(cat "$home/.config/st_theme/directory_themes" 2>/dev/null)"
-    test -z "$dt" && return
-    STT="st_theme"
-    mycfg="/tmp/st/$WINDOWID/config"
+    d="${1:-"$(pwd)"}/xx"
+    DT="$(cat "$home/.config/st_theme/directory_themes" 2>/dev/null)"
+    test -z "$DT" && return
+    dflt_cfg () {
+        local l="/tmp/st/$WINDOWID/config"
+        [ -e "$l" ] && echo "$l" || echo "$home/.config/st_theme/default_config"
+    }
     while :
     do
-        if [ "$d" == "/" ]
-        then
-            # reset
-            test -z "$have_st_theme" && return
-            unset have_st_theme
-            local fn="$home/.config/st_theme/default_config"
-            test -e "$fn" || return
-            test -e "$mycfg.pre.dir" && fn="$mycfg.pre.dir"
-            source "$fn"
-            rm -f "$mycfg.pre.dir"
-            $STT set -f -t "$theme" -c "alpha=$alpha" > /dev/null
-            return
-        else
-            # we just support one level of directory_themes, no nesting (for easy reset)
-            echo -e "$dt" | grep "$d:" > /dev/null && {
-                $STT set >/dev/null # will delete the tmp folder for win if pid old
-                test -e "$mycfg.pre.dir" || {
-                    tf="$(echo -e "$dt" | grep "$d:" | head -n 1 )"
-                    t="$(echo "$tf" | cut -d ':' -f 2- 2>/dev/null)"
-                    test -e "$mycfg" && cp "$mycfg" "$mycfg.pre.dir"
-                    $STT set -f -c "alpha=${t##*:}" -t "${t%%:*}" > /dev/null
-                    export have_st_theme="$tf"
-                }
-                return
-            }
-        fi
         d="$(dirname "$d")"
+        [ "$d" == "/" ] || [ -n "$dt" ] && break
+        dt="$(echo -e "$DT" | grep "$d:" | head -n 1)"
     done
+
+    [ "x$dt" == "x$st_dir_theme" ] && return
+    precfg="/tmp/st/$WINDOWID.pre_dir_theme/config"
+
+    if [ -n "$dt" ]; then
+        [ -z "$st_dir_theme" ] && { mkdir -p "/tmp/st/$WINDOWID.pre_dir_theme"; cp "$(dflt_cfg)" "$precfg"; }
+        t="$(echo "$dt" | cut -d : -f 2-)"
+        st_theme set -f -c "alpha=${t##*:}" -t "${t%%:*}" > /dev/null
+    else
+        (
+            test -e "$precfg" && mv "$precfg" "/tmp/st/$WINDOWID/config"
+            source "$(dflt_cfg)"
+            st_theme set -f -t "$theme" -c "alpha=$alpha" >/dev/null
+        )
+    fi
+    st_dir_theme="$dt"
 }
 
 export -f set_theme
