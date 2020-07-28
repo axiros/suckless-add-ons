@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 # Reading "$HOME/.config/st_theme/directory_themes" and applying given dir themes on cd
-# The entries can be created via 'D' hotkey in the Theme Picker and look like:
-# 1.~$ cat $HOME/.config/st_theme/directory_themes
-# /home/joe/repos/lc:darkviolet:0.25
+# The entries can be created via 'D' hotkey in the Theme Picker.
+# Format:
+#     1.~$ cat $HOME/.config/st_theme/directory_themes
+#     /home/joe/repos/lc:darkviolet:0.25
 
 
 
