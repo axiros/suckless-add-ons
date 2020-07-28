@@ -220,11 +220,11 @@ writable.
 
 ```bash
 function st_theme () {
-    local u="$SUDO_USER"
+    local cfg d u="$SUDO_USER"
     test -z "$u" && return
-    /usr/local/bin/st_theme -D /home/$u/.config/st_theme "$@"
-    chown -R $u:$u /tmp/st
-    chown -R $u:$u /home/$u/.config/st_theme
+    cfg="/home/$u/.config/st_theme"
+    /usr/local/bin/st_theme -D "$cfg" "$@"
+    for d in /tmp/st /home/$u/.config/st_theme; do chown -R "$u:$u" "$d"; done
 }
 export -f st_theme
 ```
