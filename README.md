@@ -215,12 +215,14 @@ on unverified user input.
 ## Running as sudo -root
 
 When (sudo root) should be able to use e.g. the Theme Picker or see directory
-themes we need to make sure permissions keep assigned to normal user.
+themes we need to 
 
-User perms change on sudo root - Window IDs remain, so we have to keep them
-writable.
+- export `$WINDOWID` over, e.g. via something like `alias sudo='/usr/bin/sudo --preserve-env=WINDOWID'`
+- make sure permissions of written temp and config files keep assigned to normal user.
 
-=> Put this into root's profile:
+User perms change on sudo root - Window IDs remain, so we have to keep them writable.
+
+=> Put this into root's profile, thats prbly. the most simple way:
 
 ```bash
 function st_theme () {
