@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# Reading "$HOME/.config/st_theme/directory_themes" and applying given dir themes on cd
+# The entries can be created via 'D' hotkey in the Theme Picker and look like:
+# 1.~$ cat $HOME/.config/st_theme/directory_themes
+# /home/joe/repos/lc:darkviolet:0.25
+
+
+
+function set_theme {
+    test -z "$WINDOWID" && return # not in X or sudo w/o env... 
+    local mycfg t tf dt d="${1:-"$(pwd)"}"
+    local home="${home:-$HOME}" # can be set to sudo user's home
+    dt="$(cat "$home/.config/st_theme/directory_themes" 2>/dev/null)"
+    test -z "$dt" && return
+    STT="st_theme"
+    mycfg="/tmp/st/$WINDOWID/config"
+    while :
+    do
+        if [ "$d" == "/" ]
+        then
+            # reset
+            test -z "$have_st_theme" && return
+            unset have_st_theme
+            local fn="$home/.config/st_theme/default_config"
+            test -e "$fn" || return
+            test -e "$mycfg.pre.dir" && fn="$mycfg.pre.dir"
+            source "$fn"
+            rm -rf "$mycfg.pre.dir"
+            $STT set -f -t "$theme" -c "alpha=$alpha" > /dev/null
+            return
+        else
+            # we just support one level of directory_themes, no nesting (for easy reset)
+            echo -e "$dt" | grep "$d:" > /dev/null && {
+                $STT set >/dev/null # will delete the tmp folder for win if pid old
+                test -e "$mycfg.pre.dir" || {
+                    tf="$(echo -e "$dt" | grep "$d:" | head -n 1 )"
+                    t="$(echo "$tf" | cut -d ':' -f 2- 2>/dev/null)"
+                    test -e "$mycfg" && cp "$mycfg" "$mycfg.pre.dir"
+                    $STT set -f -c "alpha=${t##*:}" -t "${t%%:*}" > /dev/null
+                    export have_st_theme="$tf"
+                }
+                return
+            }
+        fi
+        d="$(dirname "$d")"
+    done
+}
+
+export -f set_theme
+
