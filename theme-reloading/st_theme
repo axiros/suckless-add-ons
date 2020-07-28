@@ -233,6 +233,9 @@ function action_list {
         l="$(echo -e "$l" | eval "$s")"
     fi
     test "$1" == '-fzf' && {
+        test -e "$d_tmp/filter-off" || {
+            test -n "$filter" && l="$(echo -e "$l" | grep -viE "$filter")"
+        }
         t="$(cur_theme)"
         test -n "$t" && l="original: $t\t$t\n$l"
         l="$(echo -e "$l" | sed -e 's/|/\t/g')"
@@ -345,7 +348,7 @@ function action_set {
 }
 
 function action_select {
-    h 'Start fzf theme selector' "" "$@"
+    h 'Start fzf theme selector (alias: s)' "" "$@"
     local st a n fn binds header
     sortby="n"
     backup_current_settings () {
@@ -358,16 +361,17 @@ function action_select {
         export -f fzf_on_select revert set_dir_theme
         export d_tmp d_cfg here pid reset st_theme wid wid_me
     }
+
+    add_cmd () {
+        header="$header,$1"; binds="$binds,$2"
+    }
+
     define_fzf_binds () {
         export binds=""
         header="Enter: Make default, ctrl-k:up"
-        add_cmd () {
-            header="$header,$1"; binds="$binds,$2"
-        }
         add_cmd "P:transfer" "P:execute("$0" transfer -w "$wid")"
         add_cmd "R:revert" "R:execute-silent(revert)"
         add_cmd "D:set_dir" "D:execute-silent(set_dir_theme)"
-
 
         for a in "left -0.05" "right 0.05"
         do
@@ -378,8 +382,20 @@ function action_select {
         binds="$( echo "$binds"  | cut -d , -f2-)"
     }
     fzf_on_select () {
-        theme="$(echo -e "$1" | cut -d $'\t' -f 2 | xargs)"
-        notify "selected: $theme"
+        #notify-send "1: $1."
+        q="${2:-x}"
+        if [ -z "$(echo "$q" | sed -e 's/[+-]*[0-9]*[.]*[0-9]*//g')" ]; then
+            local fn="$d_tmp/$wid/config"
+            grep -v "^alpha=" "$fn" > "$fn.t"
+            echo "alpha=$q" >> "$fn.t"
+            mv "$fn.t" "$fn"
+            source "$fn"
+            touch $d_tmp/alphamode
+        else
+            rm -f $d_tmp/alphamode
+            theme="$(echo -e "$1" | cut -d $'\t' -f 2 | xargs)"
+            notify "selected: $theme"
+        fi
         action_set
     }
     set_as_default_config () {
@@ -426,11 +442,25 @@ function action_select {
     backup_current_settings
     export_functions_and_vars
     define_fzf_binds
-    h=
+
+    local themes hd='' b='' h=''
     test "$wid" == "$wid_me" && h="--height=50%"
     while true
     do
-        action_list -fzf | fzf \
+        # filter is an optional config file val
+        themes="$(action_list -fzf)"
+        test -e "$d_tmp/alphamode" || {
+            [ -n "$filter" ] && {
+                if [ -e "$d_tmp/filter-off" ]; then
+                    hd=",F:filter-on" b="touch '$d_tmp/filter-on'"
+                else
+                    hd=",F:filter-off" b="touch $d_tmp/filter-off"
+                fi
+                b=",F:execute-silent($b)+abort"
+                rm -f "$d_tmp/filter-"*
+            }
+        }
+        echo -e "$themes" | fzf \
             $h \
             --query="$theme" \
             --preview-window=up:10% \
@@ -439,10 +469,12 @@ function action_select {
             --no-info \
             --ansi \
             --color='bg:232,marker:196' \
-            --bind="$binds" \
-            --header="$header" \
-            --preview="fzf_on_select {} &" > /dev/null
+            --bind="$binds$b" \
+            --header="$header$hd" \
+            --preview="fzf_on_select {} {q} &" > /dev/null
         ret=$?
+        test -e "$d_tmp/alphamode" && continue
+        test -e "$d_tmp/filter-"* && continue
         [ "$ret" == "0" ] && set_as_default_config
         exit "$ret"
     done
@@ -503,9 +535,11 @@ function main {
     test "$1" == "-D" && { d_cfg="$2"; shift 2; } # for tests, to deliver a test config
     source_config
     [[ "$1" == -* ]] || { action="$1"; shift; }
-    while getopts "HPa:c:fho:p:rs:t:w:y" opt; do
+    while getopts "F:HPa:c:fho:p:rs:t:w:y" opt; do
         case ${opt} in
             h) [[ -n "$action" ]] || usage
+                ;;
+            F) filter="$OPTARG"
                 ;;
             P) pretty=true
                 ;;
@@ -532,7 +566,7 @@ function main {
             *) ;;
         esac
     done
-    test -z "$action" && action=select
+    [ -z "$action" ] || [ "$action" == "s" ] && action=select
     test -z "action_$action" && usage
     "action_$action" "$@"
 }
