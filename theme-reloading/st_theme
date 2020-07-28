@@ -1,265 +1,592 @@
 #!/usr/bin/env bash
 # coding: utf-8
+alpha=1
+confirmed=false
+theme=
+d_tmp="/tmp/st"
+here="$(cd "$(dirname ${BASH_SOURCE[0]})"; pwd)"
+export set_full_xrdb=false
+pid=
+pretty=
+rel_alpha=
+reset=false
+sortby=
+st_theme="$(basename "$0")"
+url_b16_master="https://github.com/chriskempson/base16-schemes-source.git"
+wid="$WINDOWID"
+test -z "$wid" && { echo "No X11 WINDOWID" >/dev/stderr; exit 1; }
 
-export d_all="$THEMES_DIR"
-export d_st="/tmp/st"
-export fn_lock="/tmp/st/previewrunning"
-export pid_fz= # This fzf window's st process id
-export pid_st= # The target window's st process id (if wid_st is passed)
-export old_theme= 
-export wid_fz="$WINDOWID"
-export wid_st= # passed by client, e.g. the st term where manual change them was started
+# contains function wininfos, setting $windir -
+# required only for setting dir theme when started on hotkey
+export wininfos="$HOME/bin/wininfos" 
+# when fzf is launched by hotkey -w is passed -> set differently. need to activate both
+wid_me="$WINDOWID" 
+wid_other= # for transfers
 
-function clear_lock {
-    rm -f "$fn_lock"
-    test -z "$SUDO_USER" || chown -R "$SUDO_USER" "$d_st"
+d_cfg="$HOME/.config/st_theme"
+
+export xrdb_template='
+*foreground:   ${forground:-$base05}
+*cursorColor:  ${cursorColor:-$base05}
+*background:   ${background:-$base00}
+
+*color0:       ${color00:-$base00}
+*color1:       ${color01:-$base08}
+*color2:       ${color02:-$base0B}
+*color3:       ${color03:-$base0A}
+*color4:       ${color04:-$base0D}
+*color5:       ${color05:-$base0E}
+*color6:       ${color06:-$base0C}
+*color7:       ${color07:-$base05}
+
+*color8:       ${color08:-$base03}
+*color9:       ${color09:-$base08}
+*color10:      ${color10:-$base0B}
+*color11:      ${color10:-$base0A}
+*color12:      ${color10:-$base0D}
+*color13:      ${color10:-$base0E}
+*color14:      ${color10:-$base0C}
+*color15:      ${color10:-$base07}
+                       
+*color16:      ${color10:-$base09}
+*color17:      ${color10:-$base0F}
+*color18:      ${color10:-$base01}
+*color19:      ${color00:-$base02}
+*color20:      ${color20:-$base04}
+*color21:      ${color21:-$base06}
+*asdfa:        ${asdfasdfa}
+*theme:        $theme
+*alpha:        ${alpha:-1}
+'
+
+# ------------------------------------------------------------------------------- tools
+function growl { dunstify -r "${growlid:-123454321}" "$st_theme" "$*"; unset growlid; }
+#function growl { dunstify -t 10000 "$st_theme" "$*"; }
+function notify { growl "$*" 2>/dev/null; }
+function msg { [[ "$1" == "+n" ]] && { shift; notify "$*"; }; echo -e "$*"; }
+function die { msg +n "ERR: $*"; exit 1; }
+type dunstify 1>/dev/null 2>&1 || function growl { true; }
+
+function h {
+    # action help display
+      test "$3" == "-H" -o "$3" == "-h" && echo "$1" && { \
+      test "$3" == "-h" -a -n "$2" && echo -e "\n$2" | sed -e 's/^    //g'; exit; }
 }
 
-trap clear_lock EXIT
-
-function pid_by_wid { xprop -id $1 |grep WM_PID | cut -d ' ' -f 3; }
-
-function set_theme {
-    local theme="$1" wid="$2" pid="$3"
-    echo "$theme" > "$d_st/$wid/theme"
-    write_xrdb "$d_all" "$theme" "$d_st/$wid/xrdb" || exit 1 # very rarely $theme is empty
-    kill -1 $pid # load it. st has a reload handler, reading the xrdb file
-    # required to really redraw, seems to be async for not activated ones:
-
+function load {
+        test -e "$1" || return
+        set -a; source "$1"; set +a
 }
 
-function set_theme_directly {
-    # called from command line, no fzf wanted. 
-    pid="$(prepare_wid_dir "$WINDOWID")"
-    set_theme "$1" "$WINDOWID" "$pid"
+function set_pid_from_wid { 
+    [ -n "$pid" ] && return 0
+    pid="$(xprop -id $wid |grep WM_PID | cut -d ' ' -f 3)"
 }
 
-function fzf_preview {
-    # called on select, in bg
-    trap clear_lock EXIT
-    test -e "$fn_lock" && return || touch "$fn_lock"
-    theme="$(echo "$1" | xargs)" # strip colors
-    test -z "$theme" && exit # sometimes an empty line in fzf
-    #dunstify -r 234541241 "$theme"
-    set_theme "$theme" "$wid_st" "$pid_st"
-    xdotool windowactivate "$wid_st"
-    xdotool windowactivate "$wid_fz"
-    #test -e "/tmp/st/reloadlock" && return
-    #touch "/tmp/st/reloadlock"
-    #set_theme "$theme" "$wid_fz" "$pid_fz"
-    #echo "$theme" > "$d_st/theme"
-    echo -e "\x1b[32mTheme:\t$old_theme -> $theme\nWIDs:\t$wid_st $wid_fz\nPIDs:\t$pid_st $pid_fz\n"
-    #echo -e "Alpha: $(get_alpha)"
-    #echo -e "\x1b[1;38;5;1m asdf"
-    clear_lock
+function load_theme_by_match {
+    # when assign is set, we assume match is not exact and show a little fzf chooser
+    # intended for use on the prompt, for the current window: e.g. st_theme set -t dark
+    local fn match="$1" showselector="${2:-}"
+
+    fn="$ST_THEMES_DIR/$match.config"
+    if [ -e "$fn" ]; then
+        load "$fn"
+        msg +n "Sourced $match"
+        test -n "$showselector" && theme="$match"
+        return
+    fi
+    test -z "$showselector" && { msg +n "Not found theme $fn"; return; }
+    action_show_inline_selector_for_match
+    test -e "$ST_THEMES_DIR/$match.config" || die "No match: $match."
+    export theme="$match"
+    #msg +n "Setting theme: $theme"
+    load_theme_by_match "$match"
 }
 
-function prepare_wid_dir {
-    local d
-    local wid="$1"
-    local pid="$(pid_by_wid $wid)"
-    d="$d_st/$1"; mkdir -p "$d"
-    test "x$(cat $d/pid 2>/dev/null)" == "x$pid" || rm -f "$d/*"
-    mkdir -p "$d"
-    echo "$pid" > "$d/pid"
-    echo "$pid"
+function action_show_inline_selector_for_match {
+    h 'Shows a little in-terminal selector' '' "$@"
+    [[ ! -t 1 ]] && return
+    showit () { grep "$match" < "$ST_THEMES_DIR/index" | cut -d '|' -f 1; }
+    export -f showit
+    match="$( cd "$ST_THEMES_DIR"
+    ls *.config | cut -d . -f 1 | fzf \
+            -q "$match" \
+            --preview-window=up:1 \
+            --height=30% -1 -0 \
+            --preview="showit {}"
+    )"
+    test -z "$match" && exit
 }
 
-function setup_read_old_values {
-    pid_fz="$(prepare_wid_dir $wid_fz)"
-    pid_st="$(prepare_wid_dir $wid_st)"
-    for d in "/$wid_st" "/"; do
-        test -n "$old_theme" -o ! -e "$d_st/$d/theme" && continue 
-        old_theme="$(cat "$d_st$d/theme")"
+
+function source_theme_config {
+    # must first source the theme= indirection, THEN overlay with specific overwrites
+    # we could source 2 times or first eval the theme name like follows:
+    tc="$(cat "$1")"
+    local fx x=
+    eval "$(echo -e "$tc" | grep ^theme= | sed -e 's/theme=/x=/g')"
+    test -n "$x" && source_theme_by_match "$x" 
+    eval "$tc"
+}
+
+function cfg_default_config {
+    echo "$d_cfg/${default_config:-"default_config"}" # config file settable
+}
+
+# ----------------------------------------------------------------------------- actions
+
+function action_b16fetch {
+    h 'Downloads all base16 schemes from the master list' \
+      "We recursively down load from $url_b16_master" "$@"
+    test -e "base16" && die "The base16 folder already exists in $(pwd)"
+    git clone "$url_b16_master" base16 || die "Could not clone $url_b16_master"
+    mkdir -p "./base16/schemes" 
+    nr="."
+    while read -r line; do
+        [[ "$line" == \#* ]] && continue
+        [[ -z "$line"     ]] && continue
+        echo "$line" | grep http | grep ': ' >/dev/null || continue
+        n="${line%%: *}"
+        k="${line#*: }"
+        msg +n "Fetching $n"
+        git clone -q "$k" "./base16/schemes/$n"
+        nr="$nr."; test "$nr" == "$test_max_downloads" && break
+    done < "./base16/list.yaml"
+    all="$(find base16/schemes -print | grep .yaml)"
+    msg "$all"
+    msg +n "$(echo "$all" | wc -l) theme fetched. Convert them via \`$st_theme b16convert\`"
+}
+
+function action_b16convert {
+    h 'Converts fetched base16 scheme yaml files into xrdb files and sets \$ST_THEMES_DIR accordingly.' \
+      'Must be called from a directory containing a base16/schemes folder, e.g. created by b16fetch' "$@"
+    set -e
+    local d_o yml d_schemes="./base16/schemes"
+    d_o="$(pwd)/base16/output/$st_theme"
+    rm -f "$d_o/index"
+    mkdir -p "$d_o"
+    test -e "$d_schemes" || die "Missing $d_schemes. Run \`$st_theme b16fetch\`."
+    add () {
+        sed -e 's/: "/="#/g' < "$yml" | sed -e 's/scheme="#/scheme="/g' # yaml to shell
+        dn="$(dirname "$yml")"
+        echo -e "\nrepo='$(cd "$dn" && git remote get-url origin)'"
+        echo -e "filename='$fn'"
+    }
+
+    for yml in $(find "$d_schemes" -maxdepth 2 -print | grep .yaml); do
+        fn="$(basename "$yml" | cut -d '.' -f 1)"
+        fnf="$d_o/$fn.config"
+        add > "$fnf"
+        source "$fnf" || die "Cannot source $fnf"
+        #rgb contrast >> "$fnf"
+        rgb line "$fnf" | tee -a "$d_o/index" # adds the colored line to the index
     done
-    test -e "$d_st/$wid_st/alpha" || echo -n 1 > "$d_st/$wid_st/alpha" 
+    cat "$d_o/index"
+    echo "Converted $(find "$d_o" | wc -l) themes into $d_o/index"
+    set +e
+    fn="$d_cfg/config.sh"
+    test "$ST_THEMES_DIR" == "$d_o" && return
+    msg "Adding ST_THEMES_DIR=$d_o to $fn. Ok? "
+    $confirmed || {
+        read -n1 q; msg
+        test "$q" == "q" -o "$q" == "n" && { msg unconfirmed; return; }
+    }
+    mkdir -p "$d_cfg"
+    touch "$fn" || die "Permission error on $fn"
+    cat "$fn" | grep -v "^ST_THEMES_DIR" > "$fn.n"
+    echo "ST_THEMES_DIR='$d_o'" > "$fn"
+    cat "$fn.n" >> "$fn"
+    rm -f "$fn.n"
+    msg "Written."
+}
+
+function cur_theme {
+    (
+        unset theme
+        load "$(cfg_default_config)"
+        load "$d_tmp/$wid/config"
+        test -n "$theme" && echo "$theme"
+    )
+}
+
+function action_list {
+    h='Format:
+    <base16 true colors as rgb/ansi> <scheme> | <filename> | <base16 hls values> | <misc>
+    misc: hsl diffs for bg and fg colors (e.g. for contrast)
+
+    => Sort by bg luminance: 
+    cat base16/output/st_theme/index | sort -t "|" -b -nk4.6  | cut -d "|"" -f 1
+
+    Args:
+    -s n: sort by name
+    -s l: sort by bg luminance
+    -r  : sort reverse
+    -P  : cut sorting infos (pretty)
+    '
+    h 'Show all themes, colored, sorted by contrast' "$h" "$@"
+    l="$(cat "$ST_THEMES_DIR/index")"
+    if [ -n "$sortby" ]; then
+        s="sort -t '|'"
+        $reset && s="$s -r" # reusing -r
+        [[ "$sortby" == "n" ]] && s="$s -k 2"
+        [[ "$sortby" == "l" ]] && s="$s -n -k 3.6"
+        l="$(echo -e "$l" | eval "$s")"
+    fi
+    test "$1" == '-fzf' && {
+        t="$(cur_theme)"
+        test -n "$t" && l="original: $t\t$t\n$l"
+        l="$(echo -e "$l" | sed -e 's/|/\t/g')"
+    }
+    test "$pretty" == "true" && echo -e "$l" | cut -d '|' -f 1 || echo -e "$l"
+}
+
+function action_set {
+    h='ARGS:
+    -a: relative alpha (e.g. -a -0.1)
+    -c: custom arguments (e.g. -c alpha=0.1 -c "background=#0000FF")
+    -p: pid if known (will call xprop to find out)
+    -r: reset to defaults before applying increment
+    -t: theme name (e.g. "phd")
+    -w: window where to set to (must be an st window, we do not verify that)
+    '
+    h 'Set/change a theme directly' "$h" "$@"
+    local d # /tmp/st/<wid>
+    local fn_db="$d_cfg/xrdb_template"
+    local cli_theme="$theme" # must be from cli or fzf, not yet loaded old config
+    unset theme # must be from config
+    xdomode=focus # make X server/wm(?) run the rendering
+
+    prepare_tmp_wid_dir () {
+        # make sure our pid is matching its pid file, X is reusing windowids a lot:
+        d="$d_tmp/$wid"
+        test -e "$d" || mkdir -p "$d"
+        set_pid_from_wid
+        test "x$(cat "$d/pid" 2>/dev/null)" == "x$pid" && return
+        rm -f "$d"/*; echo "$pid" > "$d/pid"
+    }
+    load_last_config () { 
+        load "$d/config"
+    }
+    load_default_config_if_reset_or_new () {
+        [ "$reset" == "true" ] || [ -z "$theme" ] && load "$(cfg_default_config)"
+    }
+    load_theme_on_theme_change () {
+        $set_full_xrdb || {
+            test -z "$cli_theme" && return
+            test "$cli_theme" == "$theme" && return
+        }
+        load_theme_by_match "$cli_theme" theme # only when cli theme is set we fzf
+    }
+    load_cli_config () {
+        local fn="$d/custom"
+        touch "$fn"
+        # keep old ones, when they are not overwritten:
+        while read line; do
+            k="$(echo "$line" | cut -d = -f 1)"
+            test -z "$k" && continue
+            echo "$custom" | grep "$k=" && continue
+            echo "$line" >> "$fn.tmp"
+        done < "$fn"
+        # theme itself is never just a custom value:
+        echo -e "$custom" | grep -v 'theme=' >>  "$fn.tmp"
+        mv "$fn.tmp" "$fn"
+        # previous custom values are preserved - except on theme change, when they had
+        # been deleted
+        load "$fn"
+    }
+    apply_relative_alpha () {
+        test -z "$rel_alpha" && return
+        xdomode=activate
+        alpha=$(python -Ssc "print(round(${alpha:-1}+$rel_alpha, 2))")
+    }
+    write_new_config () {
+        local fn="$d/config"
+        export theme alpha
+        #env |grep -E '^base0|^alpha=|^color|^theme=' | grep -v '=$' > "$fn"
+        env |grep -E '^alpha=|^theme=' | grep -v '=$' > "$fn"
+        sed -e '/^alpha=/d' -e '/^theme=/d' "$d/custom" >> "$fn"
+    }
+    prepare_xrdb_template () {
+        test -e "$fn_db" && return
+        mkdir -p "$d_cfg"
+        echo -e "$xrdb_template" > "$fn_db" || die "No permissions on $fn_db"
+    }
+    render_new_xrdb () {
+        # evaluates the xrdb template, i.e. inserts current (not exported) values:
+        # the grep removes unset values:
+        local tmpl fn="$1"
+        tmpl="$(cat "$fn_db")"
+        eval "echo -e \"$tmpl\"   \
+            | sed -e 's/*/\n*/g'   \
+            | grep -v -E ':(\ )*$'" \
+            | sed -e '/^$/d' > "$fn"
+    }
+    load_new_xrdb () {
+        local m
+        m="$(grep theme < "$d/xrdb" | xargs)"
+        m="$m\n$(grep alpha < "$d/xrdb" | xargs)"
+        m="wid: $wid pid: $pid\n$m"
+        msg +n "$m"
+        kill -1 "$pid"
+        test "$wid" == $WINDOWID && return
+        xdotool "window$xdomode" "$wid" # alpha changes require activate
+        xdotool "window$xdomode" "$WINDOWID"
+    }
+    prepare_tmp_wid_dir
+    load_last_config
+    load_default_config_if_reset_or_new
+    load_theme_on_theme_change
+    load_cli_config
+    apply_relative_alpha
+    write_new_config
+    prepare_xrdb_template
+    render_new_xrdb "$d/xrdb"
+    load_new_xrdb
+}
+
+function action_select {
+    h 'Start fzf theme selector' "" "$@"
+    local st a n fn binds header
+    sortby="n"
+    backup_current_settings () {
+        local fn="$d_tmp/$wid/config"
+        test -e "$fn" && cp "$fn" "$fn.backup"
+    }
+    export_functions_and_vars () {
+        # export all for the on-change subprocess
+        for f in $(grep '^function ' < "$0" | cut -d ' ' -f 2); do eval export -f "$f"; done
+        export -f fzf_on_select revert set_dir_theme
+        export d_tmp d_cfg here pid reset st_theme wid wid_me
+    }
+    define_fzf_binds () {
+        export binds=""
+        header="Enter: Make default, ctrl-k:up"
+        add_cmd () {
+            header="$header,$1"; binds="$binds,$2"
+        }
+        add_cmd "P:transfer" "P:execute("$0" transfer -w "$wid")"
+        add_cmd "R:revert" "R:execute-silent(revert)"
+        add_cmd "D:set_dir" "D:execute-silent(set_dir_theme)"
+
+
+        for a in "left -0.05" "right 0.05"
+        do
+            d=${a%% *}; n="${a##* }"
+            add_cmd "$d" "$d:execute-silent(rel_alpha=$n; action_set )"
+        done
+        header="$header:alpha"
+        binds="$( echo "$binds"  | cut -d , -f2-)"
+    }
+    fzf_on_select () {
+        theme="$(echo -e "$1" | cut -d $'\t' -f 2 | xargs)"
+        notify "selected: $theme"
+        action_set
+    }
+    set_as_default_config () {
+        theme="$(cur_theme)"
+        set_full_xrdb=true # force to create full xrdb with this:
+        action_set -p "$pid" -w "$wid" 
+        cp "$d_tmp/$wid/config" "$(cfg_default_config)"
+        local X="$d_cfg/Xresources"
+        cp "$d_tmp/$wid/xrdb" "$X"
+        xrdb -load "$X"
+        msg +n "Written and loaded into Xserver: $(cfg_default_config) $X"
+    }
+    revert () {
+        local fn="$d_tmp/$wid/config"
+        test -e "$fn.backup" || msg +n "No backup"
+        cp "$fn.backup" "$fn"
+        growlid=101; growl "Reverting to backup"
+        source "$d_tmp/$wid/config"
+        set_full_xrdb=true # force to create full xrdb with this:
+        action_set -p "$pid" -w "$wid"
+    }
+    set_dir_theme () {
+        fn="$d_cfg/directory_themes"
+        if [ "$wid" == "$wid_me" ]; then
+            windir="$(pwd)"
+        else
+            source "$wininfos"
+            wininfos "$wid"
+        fi
+        test -z "$windir" && { msg +n "Require \$windir"; exit 1; }
+        test -e "$fn" || touch "$fn"
+        grep -v "^$windir:" < "$fn" > "$fn.tmp"
+        load "$(cfg_default_config)"
+        load "$d_tmp/$wid/config"
+        d="$windir:$theme:${alpha:-1}"
+        echo "$d" >> "$fn.tmp"
+        mv "$fn.tmp" "$fn"
+        growlid=101; growl "Have set<br>$d into<br>$fn"
+    }
+
+
+
+    set_pid_from_wid
+    backup_current_settings
+    export_functions_and_vars
+    define_fzf_binds
+    h=
+    test "$wid" == "$wid_me" && h="--height=50%"
+    while true
+    do
+        action_list -fzf | fzf \
+            $h \
+            --query="$theme" \
+            --preview-window=up:10% \
+            --delimiter='\t' \
+            --with-nth=1 \
+            --no-info \
+            --ansi \
+            --color='bg:232,marker:196' \
+            --bind="$binds" \
+            --header="$header" \
+            --preview="fzf_on_select {} &" > /dev/null
+        ret=$?
+        [ "$ret" == "0" ] && set_as_default_config
+        exit "$ret"
+    done
+}
+
+function action_transfer {
+    h 'Transfers config to other window' '' "$@"
+    local ow fn="$d_tmp/$wid/config"
+    test -e "$fn" || "$0" set -w "$wid"
+    t="$(cur_theme)"
+    configure_other () {
+        d="$d_tmp/$1"
+        mkdir -p "$d"; rm -f "$d/*"
+        cp "$fn" "$d/config"
+        "$0" set -w "$1" -f -t "$t"
+    }
+    test -n "$wid_other" && { configure_other "$wid_other"; return $?; }
+    while true
+    do
+        wid_other="$(xdotool selectwindow)"
+        test -z "$wid_other" -o "$wid_other" == "$ow" && return
+        ow="$wid_other"
+        configure_other "$ow"
+    done
+}
+
+function usage {
+    actions_help () {
+        actions="$( grep "^function action_" < "$0" \
+                    | cut -d '_' -f 2- \
+                    | cut -d ' ' -f 1 )"
+        for a in $actions; do test "$a" != "help" && {
+            echo -en "\x1b[1m$a\x1b[0m\x1b[1000D\x1b[12C"; $0 "$a" -H; }
+        done
+    }
+    echo -e "\x1b[1mTheme Selector For Suckless Terminal (st)\x1b[0m 
+    
+    USAGE: $st_theme [action] [switches]
+
+    ACTIONS (default: start fzf selector):
+
+    $(actions_help)
+
+    Default action: Start fzf selector on windowid given via switch -w
+    $st_theme <action name> -h: Detailed help on actions.
+
+    " | sed -e 's/^    //g'
+    exit 0
+}
+
+function source_config {
+    test -e "$d_cfg/config.sh" || return
+    set -a; source "$d_cfg/config.sh"; set +a
 }
 
 function main {
-    clear_lock
-    theme=
-    while getopts "p:w:ct:" opt; do
+    test -z "$1" && usage
+    test "$1" == "-D" && { d_cfg="$2"; shift 2; } # for tests, to deliver a test config
+    source_config
+    [[ "$1" == -* ]] || { action="$1"; shift; }
+    while getopts "HPa:c:fho:p:rs:t:w:y" opt; do
         case ${opt} in
-            w) wid_st="$OPTARG"
+            h) [[ -n "$action" ]] || usage
                 ;;
-            p) xx="$OPTARG" # no in use, set auto
+            P) pretty=true
                 ;;
-            c) themes; exit $? # just print the colors (debugging)
-                ;; 
-            t) theme="$OPTARG" # sets the theme  into the current window (no select)
+            a) rel_alpha="$OPTARG"
                 ;;
+            c) custom="$custom\n$OPTARG"
+                ;;
+            f) set_full_xrdb=true
+                ;;
+            o) wid_other="$OPTARG"
+                ;;
+            p) pid="$OPTARG"
+                ;;
+            r) reset=true
+                ;;
+            s) sortby="$OPTARG"
+                ;;
+            t) theme="$OPTARG"
+                ;;
+            y) confirmed=true;
+                ;;
+            w) wid="$OPTARG"
+                ;;
+            *) ;;
         esac
     done
-    test -z "$wid_st" && wid_st=$wid_fz # called standalone
-    test -n "$theme" && { set_theme_directly "$theme"; exit $?; }
-
-    setup_read_old_values
-    echo "$wid_st"
-    #ls "$d_all" | cut -d '-' -f2- | cut -d '.' -f1 | fzf \
-    #alpha -0.3
-    themes | fzf \
-        --preview-window=up:10% \
-        --ansi \
-        --header="Enter: Set theme as default. L/R: Alpha. alt-p: Apply elsewhere. alt-r: Record as dir theme" \
-        --no-info \
-        --color='bg:232,marker:196' \
-        --bind="alt-r:execute(set_dir_theme {}),alt-p:execute(apply_other_st {}),left:execute-silent(alpha -0.05 {}),right:execute-silent(alpha 0.05 {})" \
-        --preview="fzf_preview {} " || return 1
-        #--cycle \
-    # on accept we write it as default for all:
-    cp "$d_st/$wid_st/xrdb" "/tmp/st/xrdb"
-    cp "$d_st/$wid_st/theme" "/tmp/st/theme"
+    test -z "$action" && action=select
+    test -z "action_$action" && usage
+    "action_$action" "$@"
 }
 
-function set_dir_theme {
-    source "$HOME/bin/wininfos"
-    wininfos "$wid_st"
-    d="${windir:-`pwd`}"
-    echo "$1" | xargs > "$d/.terminal_theme"
-    notify-send "Have set directory theme" "$1 for $d."
-    exit
-}
+# ------------------------------------------------------------------------ Python Tools
+# we keep that at the end to not confuse single ft colorscheme vim setups
 
-function apply_other_st {
-    local theme="$1"
-    local d
-    local have="$wid_st "
-    echo -e "Click on each window you want $(echo "$1"|xargs) to be applied.\nClick again a window to to back."
-    while true; do
-        w="$(xdotool selectwindow)"
-        echo "$have" | grep "$w" && break
-        have="$w $have"
-        apply_at_wid "$w"
-    done
-}
-function apply_at_wid {
-    d="$d_st/$1"
-    mkdir -p "$d"
-    cp -a $d_st/$wid_st/* $d/
-    pid_by_wid $1 > "$d/pid"
-    kill -1 $(cat "$d/pid")
-}
+function rgb {
+    python -sSc "if 1:
+    import colorsys as C
 
-return 2>/dev/null || true
+    rgb = lambda hexc: tuple(int(hexc[1:][i:i+2], 16) for i in (0, 2, 4))
 
-# -------------------------------------------------------------------------------Python
-
-function get_alpha { cat $d_st/$wid_st/alpha | cut -c -4; }
-
-function alpha {
-    # left - right button increases/decreases:
-    local fn="$d_st/$wid_st/alpha"
-    local a="$(cat "$fn")"
-    python -Ssc "a=float('$a'.strip()); a+=$1; print(max(0, min(a, 1)))" >  "$fn" 2>/dev/null
-    dunstify -r 987234209 "Alpha" "$(get_alpha)" >/dev/null 2>/dev/null
-    fzf_preview "$2" >/dev/null 2>/dev/null
-}
-
-
-function themes {
-    # creates the fzf entries, with colors
-    python -Ssc "if 1:
-    import os, math
-    themes = {}
-    SL = '                          '
-    H = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '0A', '0B', '0C', '0D', '0E', '0F']
-    bg, fg = '00', '05'
-    theme_name_by_fn = lambda fn: fn.replace('base16-', '').replace('-256.Xresources', '')
-    old = None
-
-    def rgb(hexc):
-        return tuple(int(hexc[1:][i:i+2], 16) for i in (0, 2, 4))
-
-    def add_col(into, b16nr, hexc):
-        R, G, B = r = rgb(hexc)
-        into[b16nr] = m = {'hex': hexc, 'rgb': r}
-        # https://stackoverflow.com/a/596243
-        if b16nr in (bg, fg):
-            into['lum_%s' % b16nr] = math.sqrt( 0.299*R**2 + 0.587*G**2 + 0.114*B**2 )
-
-    def add_theme(fn, defs):
-        m = {}
-        for l in defs.splitlines():
-            l = l.split('#define base', 1)[1].split(' ')
-            add_col(m, l[0], l[1])
-        m['name'] = fn
-        bglum = m['lum_00']
-        fglum = m['lum_05']
-        k = bglum - fglum
-        while k in themes:
-            k += 0.001
-        themes[k] = m
-        if fn == '$old_theme':
-            global old
-            old = m
-
-    fn_all = [fn for fn in os.listdir('$d_all') if fn.endswith('-256.Xresources')]
-    for fn in fn_all:
-        if not fn.endswith('-256.Xresources'): continue
-        with open('$d_all/' + fn) as fd:
-            s = fd.read().lstrip().split('#defin', 1)[1].strip().split('\n\n', 1)[0]
-            s = '#defin' + s
-        add_theme(theme_name_by_fn(fn), s)
-    # order by bg lum:
-    lines = []
-    def to_line(theme, col_spc='\033[48;2;%s;%s;%sm  '):
-        l = '\033[0m'
-        l += ''.join([col_spc % theme[k]['rgb'] for k in H])
-        l += '\033[0m ' + col_spc % theme['00']['rgb'] + col_spc.replace('[48', '[38') % theme['05']['rgb']
-        return l + (theme['name'] + SL)[:30] + '\033[0m' 
-        
-    for k in sorted(themes):
-        lines.append(to_line(themes[k]))
-    if old:
-        # current theme should be autoselected, at end of list
-        lines.insert(0, to_line(old))
-    [print(l) for l in lines]
+    def print_colored_lines():
+        spec = {}
+        R = '\033[0m'
+        exec(open('$2').read(), {}, spec)
+        # add the fzf ansi colored line to the index:
+        b16s = [hex(i).replace('x', '').upper() for i in range(0, 16)]
+        spec.update({'base%s_rgb' % k: rgb(spec['base%s' % k]) for k in b16s})
+        spec.update({'base%s_hsl' % k: C.rgb_to_hls(*spec['base%s_rgb' % k]) for k in b16s})
+        spec['bgfgdiff'] = [spec['base00_hsl'][i] - spec['base05_hsl'][i] for i in range(3)]
+        T = '\033[48;2;%s;%s;%sm  '
+        cut = lambda n, s: spec[s].ljust(n)[:n]
+        l = ''.join([T  % spec['base%s_rgb' % k] for k in b16s])
+        l += R + '  ' + T  % spec['base00_rgb']
+        l += (T.replace('[48', '[38') % spec['base05_rgb'])[:-2]
+        l += cut(30, 'scheme') + R + ' | ' +  cut(30, 'filename') + ' | '
+        l += '|'.join(['%.2f,%.2f,%.2f' % spec['base%s_hsl' % k] for k in b16s])
+        l += '| %.2f,%.2f,%.2f' % tuple(spec['bgfgdiff'])
+        print(l)
+    print_colored_lines()
     "
 }
 
-function write_xrdb {
-    # replace the color->define indirections with values, so that we don't have to xrdb load it
-    # (in x.c of st we can load that string directly w/o having to change xrdb on the Xserver)
-    python -Ssc "if 1:
-    import os, sys
-    d_all, t, dest='$1', '$2'.strip(), '$3'
-    m = {}
-    r = []
-    fn = d_all + '/base16-%s-256.Xresources' % t
-    if not os.path.exists(fn):
-        os.system('notify-send \"Not found\" \"%s\"' % fn)
-        sys.exit(1)
-    else:
-        with open(fn) as fd: s = fd.read().splitlines()
-        for l in s:
-            if l.startswith('#define'):
-                k = l.split()
-                m[k[1]] = k[2]
-            else:
-                r.append(l)
-        #r.append('*alpha: $alpha')
-        r.append('')
-        r = '\n'.join(r)
-        for k, v in m.items():
-            r = r.replace(k, v)
-        fn = dest.replace('/xrdb', '/alpha')
-        if os.path.exists(fn):
-            alpha = float(open(fn).read().strip())
-            r += '\n*alpha: %.2f' % alpha
-        with open(dest, 'w') as fd:
-            fd.write(r)
-    "
-}
-
-export -f alpha
-export -f apply_at_wid
-export -f apply_other_st
-export -f clear_lock
-export -f fzf_preview
-export -f get_alpha
-export -f set_theme
-export -f set_dir_theme
-export -f pid_by_wid
-export -f write_xrdb
+# function set_x_resources_inplace {
+#     # for what it's worth:
+#     # this would replace theme values into an existing resources filename
+#     # leaving other values intact. $1: Theme values, $2 Xresources file
+#     python -Ssc "if 1:
+#     x='$1'; X=open('$2').read().splitlines()
+#     xind = {k.split(': ', 1)[0]: i for k, i in zip(X, range(len(X)))}
+#     x = open(x).read().splitlines()
+#     while x:
+#         kv = x.pop(0)
+#         if not kv.startswith('*'): continue
+#         k, v = kv.split()
+#         pos = xind.get(k[:-1])
+#         if not pos:
+#             X.append(kv)
+#         else:
+#             X[pos] = kv
+#     open('$2', 'w').write('\n'.join(X))
+#     "
+# }
 
 main "$@"

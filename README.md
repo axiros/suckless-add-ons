@@ -1,66 +1,24 @@
+---
+
+author: gk
+version: 20200728
+
+---
+
 # Suckless Add Ons
 
 ## Dynamic Terminal Colors
 
-Allows [st](https://st.suckless.org/) to read color and alpha definitions for the 16 base colors from a file, after receiving a signal.
+Allows [st](https://st.suckless.org/) to read color and alpha definitions from a file, after receiving a signal.
+
+Per default we support dynamic changes of all variables defined in the [st-xresources patch](https://st.suckless.org/patches/xresources/), including the [16 base colors](http://chriskempson.com/projects/base16/).
 
 At reload we try to
 
 1. Read `/tmp/st/$WINDOWID/xrdb` if `/tmp/st/$WINDOWID/pid` is present and matches st's current PID.
-1. On error read `/tmp/st/xrdb` (i.e. current defaults).
-1. On error read (xrdb-loaded) `$HOME/.Xresources` (that’s what the [st-xresources patch](https://st.suckless.org/patches/xresources/) does).
+1. On error read `$HOME/.config/st_theme/default_config` (i.e. current defaults).
+1. On error use the `Xresources` definitions, which X11 windows get (once) from the X server at creation (that’s what the [st-xresources patch](https://st.suckless.org/patches/xresources/) does). Changes here require to reload them into the X server via `xrdb <-load|-merge>`.
 1. On error give up.
-
-<details><summary>File Format</summary>
-
-```
-2.$ cd /tmp/st # default one, others in /tmp/st/<windowid>/xrdb
-2.st$ cat xrdb
-! Base16 Rebecca
-! Scheme: Victor Borja (http://github.com/vic) based on Rebecca Theme (http://github.com/vic/rebecca-theme)
-
-*foreground:   #f1eff8
-#ifdef background_opacity
-*background:   [background_opacity]#292a44
-#else
-*background:   #292a44
-#endif
-*cursorColor:  #f1eff8
-
-*color0:       #292a44
-*color1:       #a0a0c5
-*color2:       #6dfedf
-*color3:       #ae81ff
-*color4:       #2de0a7
-*color5:       #7aa5ff
-*color6:       #8eaee0
-*color7:       #f1eff8
-
-*color8:       #666699
-*color9:       #a0a0c5
-*color10:      #6dfedf
-*color11:      #ae81ff
-*color12:      #2de0a7
-*color13:      #7aa5ff
-*color14:      #8eaee0
-*color15:      #53495d
-
-! Note: colors beyond 15 might not be loaded (e.g., xterm, urxvt),
-! use 'shell' template to set these if necessary
-*color16:      #efe4a1
-*color17:      #ff79c6
-*color18:      #663399
-*color19:      #383a62
-*color20:      #a0a0c5
-*color21:      #ccccff
-*alpha: 0.9
-
-```
-
-</details>
-
-You can pull many themes from the base16 repo and have them rendered into .Xresources files.
-
 
 
 ## Theme Picker
@@ -74,19 +32,22 @@ Sorry for the flickering - we try to show that it is pretty fast, applying the t
 1. It opens on hotkey (default alt-enter) in another X window. If you prefer to have it
    floating, then set a window class within the launch command, in `st.c`
 1. Since this works more low level than `tput` commands, it also affects vim
-   directly as you can see. Personally I still prefer to use colorschemes, though.
-1. Can also set a theme into a given window directly, w/o fzf.
+   directly as you can see. Personally I still prefer to use dedicatd vim colorschemes,
+   though - this does not collide with setting the 16 base colors.
+1. Can also set a theme into a given window directly, w/o fzf
 
-The latter feature allows e.g. coloring based on directory entered, via an
-overload of `cd`, e.g.: 
+    st_theme set [-t <theme name>] [-a <relative alpha change>] [-c <custom attr, e.g. alpha=0.3>]
+
+The latter feature allows e.g. coloring based on directory entered, via an overload of `cd`, e.g.: 
 
 ```bash
+# simply trying find .terminal_theme files in directories:
 function set_theme {
     # walk up the tree, trying to load a directory theme:
     local d="${1:-"$(pwd)"}"
     test "$d" == "/" && return
     test -e "$d/.terminal_theme" || { set_theme "$(dirname "$d")"; return; }
-    st_theme -t "$(xargs < "$d"/.terminal_theme  | sed -e 's/base16://g')"
+    st_theme -f -t "$(xargs < "$d"/.terminal_theme  | sed -e 's/base16://g')"
 }
 
 function cd {
@@ -97,17 +58,21 @@ function cd {
 export -f cd set_theme
 
 ```
+
 ![cd-demo](./theme-reloading/cd.gif)
 
-The theme picker offers to write the current theme into the current directory
-via an hotkey (see help header).
+A more complex version of `set_theme`, which keeps the directories in a file (`.config/st_theme/directory_themes`), is
+provided [here](./theme-reloading/set_theme_on_cd) - On hotkey `D` the theme
+picker writes that file.
 
-For differently colored remote hosts, you can easily do something similar in
-an ssh-wrapper.
+---
+
+- For differently colored remote hosts, you can easily do something similar in an ssh-wrapper.
 
 ## Ideas
 
-1. Why not dynamically change the Red-ness of a window based on CPU currently burnt within it? 
+
+1. Dynamically change the Red-ness of a window based on CPU currently burnt within it? 
 1. Send a custom ANSI-Escape sequence with the theme name to stdout, so that
    javascript based terminal emulators can re-apply matching stylesheets, when
    playing back recordings done in st.
@@ -117,9 +82,9 @@ an ssh-wrapper.
 Not yet implemented but maybe one day. If you have other ideas let me know, via a github issue.
 
 
-### Installation
+## Installation
 
-#### Update ST
+### Update ST
 
 The [suckless way](https://www.youtube.com/watch?v=3C6saSpX4KQ).
 
@@ -153,40 +118,118 @@ Once started, find the PID of it and send a kill -1 (HUP) to it. It should survi
 
 For alpha you need also the [alpha](https://st.suckless.org/patches/alpha/) patch and a running compositor.
 
-#### Theme Picker
+
+### Theme Picker Install
 
 1. Have a python executable in your $PATH
 1. Install [fzf](https://github.com/junegunn/fzf)
-1. Make [this file](./theme-reloading/st_theme) available in your `$PATH` - it
+1. Make [st_theme](./theme-reloading/st_theme) available in your `$PATH` - it
    will be called at hotkey `alt-return` (change in `config.def.h`)
-1. In e.g. your `.bashrc` export `$THEMES_DIR`, pointing to where all your
-   themes are:
 
-```bash
-2.~$ cd $THEMES_DIR
-2.xresources$ ls
-base16-3024-256.Xresources
-base16-gruvbox-light-hard-256.Xresources
-(...)
-```
-
-Optional: xdotool, notify-send
+Optional: xdotool, [dunstify](https://dunst-project.org/)
 
 - `st_theme` invokes `xdotool` to quickly activate the window at fzf-select, otherwise X does
 not always redraw them when you hover over the available themes too quickly.
 We also use `xdotool` to select other windows a certain theme should be
 applied at. `xprop` would be an alternative.
 - Also it sometimes invokes notify-send or dunstify, for some notifications.
-- For a special feature, writing `.terminal_theme` files for directory based
-  themes it requires to have the directory st is currently in, from the fzf window.
+- For a special feature, directory based themes, it requires to have the directory st is
+  currently in, from the fzf window.
   This is tricky, when `st_theme` is launched via a hotkey and not by just
   typing `st_theme` into the terminal. `st_theme` tries to call a script
   `wininfos` and passes the windowid of st. I have such a script but it is
   pretty custom.
-  When `wininfos` is not available `st_theme` writes the theme into the directory where it was launched. 
+  When `wininfos` is not available `st_theme` writes the theme for the directory
+  where it was launched. 
 
 
 -> Remove or replace with your tools if you don't want/have the optionals.
+
+
+### Pulling Themes
+
+The Theme Picker has some functions to pull and convert all base16 themes:
+
+```bash
+1.inst$ mkdir st_theme
+1.inst$ cd st_theme/
+1.st_theme$ st_theme -h
+Theme Selector For Suckless Terminal (st)
+
+USAGE: st_theme [action] [switches]
+
+ACTIONS (default: start fzf selector):
+
+show_inline_Shows a little in-terminal selector
+b16fetch    Downloads all base16 schemes from the master list
+b16convert  Converts fetched base16 scheme yaml files into xrdb files and sets \$ST_THEMES_DIR accordingly.
+list        Show all themes, colored, sorted by contrast
+set         Set/change a theme directly
+select      Start fzf theme selector
+transfer    Transfers config to other window
+
+Default action: Start fzf selector on windowid given via switch -w
+st_theme <action name> -h: Detailed help on actions.
+
+1.st_theme$ st_theme b16fetch
+Cloning into 'base16'...
+Fetching atelier
+(...)
+
+# now we convert them to st_theme format:
+1.st_theme$ st_theme b16convert
+Eva                            | eva                            | 0.59,59.50,-0.30|(...)
+(...)
+Converted 159 themes into /home/gk/inst/st_theme/base16/output/st_theme/index
+Adding ST_THEMES_DIR=/home/gk/inst/st_theme/base16/output/st_theme to /home/gk/.config/st_theme/config.sh. Ok?
+y # say yes here
+
+# show them all:
+1.st_theme$ st_theme list -P
+```
+
+### Instructing X Server to Load Current Default Theme At Startup
+
+The theme picker, when you exit with enter writes (and loads) `$HOME/.config/st_theme/Xresources` based on current choice of theme and alpha, so that new windows get themes accordingly.
+
+This is how you make it load that files at startup, e.g. in your .xinitrc:
+
+```bash
+load_xresources () {
+    # complete setup for st, thanks to the Xresources patch:
+    xrdb $HOME/.Xresources
+    xrdb -merge $HOME/.config/st_theme/Xresources
+}
+```
+
+## Security
+
+We source and bash-eval a lot the contents of config files -> do not create them based
+on unverified user input.
+
+
+## Running as sudo -root
+
+When (sudo root) should be able to use e.g. the Theme Picker or see directory
+themes we need to make sure permissions keep assigned to normal user.
+
+User perms change on sudo root - Window IDs remain, so we have to keep them
+writable.
+
+=> Put this into root's profile:
+
+```bash
+function st_theme () {
+    test -z "$SUDO_USER" && return
+    # get configured form normal user's config:
+    /usr/local/bin/st_theme -D $SUDO_USER/.config/st_theme "$@"
+    chown -R $SUDO_USER:$SUDO_USER /tmp/st # keep tmp files writeable for normal user
+}
+export -f st_theme
+
+```
+
+It should be clear that what was said regarding security and evals is yet more critical in sudo-root mode of operation. 
 
 
 ### Addendum
