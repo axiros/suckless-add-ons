@@ -220,13 +220,13 @@ writable.
 
 ```bash
 function st_theme () {
-    test -z "$SUDO_USER" && return
-    # get configured form normal user's config:
-    /usr/local/bin/st_theme -D $SUDO_USER/.config/st_theme "$@"
-    chown -R $SUDO_USER:$SUDO_USER /tmp/st # keep tmp files writeable for normal user
+    local u="$SUDO_USER"
+    test -z "$u" && return
+    /usr/local/bin/st_theme -D /home/$u/.config/st_theme "$@"
+    chown -R $u:$u /tmp/st
+    chown -R $u:$u /home/$u/.config/st_theme
 }
 export -f st_theme
-
 ```
 
 It should be clear that what was said regarding security and evals is yet more critical in sudo-root mode of operation. 
