@@ -235,7 +235,7 @@ This is how you make it load that files at startup, e.g. in your .xinitrc:
 load_xresources () {
     # complete setup for st, thanks to the Xresources patch:
     xrdb $HOME/.Xresources
-    xrdb -merge $HOME/.config/st_theme/Xresources
+    xrdb -load $HOME/.config/st_theme/Xresources
 }
 ```
 
