@@ -26,7 +26,7 @@ function set_theme {
             test -e "$fn" || return
             test -e "$mycfg.pre.dir" && fn="$mycfg.pre.dir"
             source "$fn"
-            rm -rf "$mycfg.pre.dir"
+            rm -f "$mycfg.pre.dir"
             $STT set -f -t "$theme" -c "alpha=$alpha" > /dev/null
             return
         else
