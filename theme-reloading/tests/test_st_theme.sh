@@ -1,5 +1,6 @@
 set -e
 here="$(cd "$(dirname ${BASH_SOURCE[0]})"; pwd)"
+export PATH="$(cd $here/../):$PATH"
 export cur_test=
 export d_test_work="$here/work"
 tests=
