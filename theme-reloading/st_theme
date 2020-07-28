@@ -545,11 +545,12 @@ function rgb {
     import colorsys as C
 
     rgb = lambda hexc: tuple(int(hexc[1:][i:i+2], 16) for i in (0, 2, 4))
+    spec = {}
+    with open('$2') as fd: s = fd.read()
+    exec(s, {}, spec)
 
     def print_colored_lines():
-        spec = {}
         R = '\033[0m'
-        exec(open('$2').read(), {}, spec)
         # add the fzf ansi colored line to the index:
         b16s = [hex(i).replace('x', '').upper() for i in range(0, 16)]
         spec.update({'base%s_rgb' % k: rgb(spec['base%s' % k]) for k in b16s})
