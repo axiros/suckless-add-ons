@@ -48,9 +48,8 @@ When you enter a (float) number into the fzf query then st_theme will
 interpret it as alpha value and instantly applies the value. On enter you get
 back into color selection mode. On escape in alpha mode we exit fzf.
 
-This allows to quickly set e.g. a dwm-floating window over another into
+This allows to quickly set e.g. a [dwm](https://dwm.suckless.org/)-floating window over another into
 transparent mode, i.e. to get from this:
-
 
 ![alphapre](./theme-reloading/docs/alphapre.png)
 
