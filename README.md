@@ -90,9 +90,9 @@ export -f cd set_theme
 
 ![cd-demo](./theme-reloading/docs/cd.gif)
 
-A more complex version of `set_theme`, which keeps the directories in a file (`.config/st_theme/directory_themes`), is
-provided [here](./theme-reloading/set_theme_on_cd) - On hotkey `D` the theme
-picker writes that file.
+A more complex version of `set_theme`, which keeps the directories in a file (`.config/st_theme/directory_themes`) and resets to defaults at directory-leave is
+provided [here](./theme-reloading/set_theme_on_cd).  
+On hotkey `D` the theme picker adds an entry into that file: `<current directory>:<themename>:<alpha>`
 
 ---
 
