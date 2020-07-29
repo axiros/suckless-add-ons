@@ -27,7 +27,7 @@ At reload we try to
 
 [Here](./theme-reloading/st_theme) is a theme picker, based on fzf:
 
-![theme-picker-demo](./theme-reloading/theme_sel.gif)
+![theme-picker-demo](./theme-reloading/docs/theme_sel.gif)
 
 Sorry for the flickering - we try to show that it is pretty fast, applying the themes.
 
@@ -42,7 +42,33 @@ Sorry for the flickering - we try to show that it is pretty fast, applying the t
 st_theme set [-t <theme name>] [-a <relative alpha change>] [-c <custom attr, e.g. alpha=0.3>]
 ```
 
-The latter feature allows e.g. coloring based on directory entered, via an overload of `cd`, e.g.: 
+### Instant Alpha Changes
+
+When you enter a (float) number into the fzf query then st_theme will
+interpret it as alpha value and instantly applies the value. On enter you get
+back into color selection mode. On escape in alpha mode we exit fzf.
+
+This allows to quickly set e.g. a dwm-floating window over another into
+transparent mode, i.e. to get from this:
+
+
+![alphapre](./theme-reloading/docs/alphapre.png)
+
+to this:
+
+![alphapre](./theme-reloading/docs/alphapost.png)
+
+via `ALT-ENTER->0->ESC` (with alt enter the default for starting the selector)
+
+If you do this more often you might want to bind hotkeys to
+
+```bash
+st_theme set -c alpha=<0|1> [-w <windowid>]
+```
+
+### Directory Themes
+
+The "direct apply" feature allows coloring based on directory entered, via an overload of `cd`, e.g.: 
 
 ```bash
 # simply trying find .terminal_theme files in directories:
@@ -51,7 +77,7 @@ function set_theme {
     local d="${1:-"$(pwd)"}"
     test "$d" == "/" && return
     test -e "$d/.terminal_theme" || { set_theme "$(dirname "$d")"; return; }
-    st_theme -f -t "$(xargs < "$d"/.terminal_theme  | sed -e 's/base16://g')"
+    st_theme set -f -t "$(xargs < "$d"/.terminal_theme  | sed -e 's/base16://g')"
 }
 
 function cd {
@@ -63,7 +89,7 @@ export -f cd set_theme
 
 ```
 
-![cd-demo](./theme-reloading/cd.gif)
+![cd-demo](./theme-reloading/docs/cd.gif)
 
 A more complex version of `set_theme`, which keeps the directories in a file (`.config/st_theme/directory_themes`), is
 provided [here](./theme-reloading/set_theme_on_cd) - On hotkey `D` the theme

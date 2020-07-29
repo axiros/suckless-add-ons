@@ -473,7 +473,10 @@ function action_select {
             --header="$header$hd" \
             --preview="fzf_on_select {} {q} &" > /dev/null
         ret=$?
-        test -e "$d_tmp/alphamode" && continue
+        test -e "$d_tmp/alphamode" && {
+            [ "$ret" == 130 ] && exit "$ret" # entered alpha, hit escape -> out
+            continue # entered alpha hit return -> back to color selection
+        }
         test -e "$d_tmp/filter-"* && continue
         [ "$ret" == "0" ] && set_as_default_config
         exit "$ret"
