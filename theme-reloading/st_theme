@@ -42,19 +42,18 @@ export xrdb_template='
 *color8:       ${color08:-$base03}
 *color9:       ${color09:-$base08}
 *color10:      ${color10:-$base0B}
-*color11:      ${color10:-$base0A}
-*color12:      ${color10:-$base0D}
-*color13:      ${color10:-$base0E}
-*color14:      ${color10:-$base0C}
-*color15:      ${color10:-$base07}
+*color11:      ${color11:-$base0A}
+*color12:      ${color12:-$base0D}
+*color13:      ${color13:-$base0E}
+*color14:      ${color14:-$base0C}
+*color15:      ${color15:-$base07}
                        
-*color16:      ${color10:-$base09}
-*color17:      ${color10:-$base0F}
-*color18:      ${color10:-$base01}
-*color19:      ${color00:-$base02}
+*color16:      ${color16:-$base09}
+*color17:      ${color17:-$base0F}
+*color18:      ${color18:-$base01}
+*color19:      ${color19:-$base02}
 *color20:      ${color20:-$base04}
 *color21:      ${color21:-$base06}
-*asdfa:        ${asdfasdfa}
 *theme:        $theme
 *alpha:        ${alpha:-1}
 '
