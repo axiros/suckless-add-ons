@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-export SHELL=/bin/bash
 # coding: utf-8
+
+# we export all functions for fzf's subprocs - would not work when default shell is fish:
+export SHELL=/bin/bash
+
 alpha=1
 confirmed=false
 theme=
